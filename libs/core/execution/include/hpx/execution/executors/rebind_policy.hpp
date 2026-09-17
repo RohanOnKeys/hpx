@@ -97,18 +97,6 @@ namespace hpx::execution::detail {
         using decayed_policy_type = std::decay_t<Policy>;
         using decayed_executor_type = std::decay_t<Executor>;
 
-        using category1 =
-            rebind_policy_executor_category<decayed_policy_type>::type;
-        using category2 =
-            hpx::traits::executor_execution_category_t<decayed_executor_type>;
-
-        static_assert(
-            hpx::execution::experimental::detail::is_not_weaker_v<category2,
-                category1>,
-            "the execution category of Executor must not be weaker than "
-            "that of Policy; see hpx::execution::experimental::"
-            "rebind_executor");
-
     public:
         /// \brief The type of Policy rebound to Executor, with its
         ///        executor parameters left unchanged.
@@ -118,9 +106,38 @@ namespace hpx::execution::detail {
         /// supplying Policy's current \c executor_parameters_type as the
         /// Parameters_ argument so that only the executor changes.
         using type =
-            decayed_policy_type::template rebind<decayed_executor_type,
-                decayed_policy_type::executor_parameters_type>::type;
+            hpx::execution::experimental::rebind_executor_t<decayed_policy_type,
+                decayed_executor_type,
+                decayed_policy_type::executor_parameters_type>;
     };
+
+    namespace detail {
+
+        template <typename Policy, typename Executor>
+        struct validated_rebind_policy_executor
+        {
+        private:
+            using decayed_policy_type = std::decay_t<Policy>;
+            using decayed_executor_type = std::decay_t<Executor>;
+
+            using category1 =
+                rebind_policy_executor_category<decayed_policy_type>::type;
+            using category2 = hpx::traits::executor_execution_category_t<
+                decayed_executor_type>;
+
+            static_assert(
+                hpx::execution::experimental::detail::is_not_weaker_v<category2,
+                    category1>,
+                "the execution category of Executor must not be weaker than "
+                "that of Policy; see hpx::execution::experimental::"
+                "rebind_executor");
+
+        public:
+            using type = rebind_policy_executor<decayed_policy_type,
+                decayed_executor_type>::type;
+        };
+
+    }    // namespace detail
 
     /// \brief Convenience alias for
     ///        \c rebind_policy_executor<Policy, Executor>::type.
@@ -132,8 +149,7 @@ namespace hpx::execution::detail {
     /// \tparam Executor The executor type Policy should be rebound to.
     HPX_CXX_CORE_EXPORT template <typename Policy, typename Executor>
     using rebind_policy_executor_t =
-        rebind_policy_executor<std::decay_t<Policy>,
-            std::decay_t<Executor>>::type;
+        detail::validated_rebind_policy_executor<Policy, Executor>::type;
 
     /// \brief Customization point controlling how an execution policy is
     ///        rebound to a new set of executor parameters, independently
@@ -168,8 +184,7 @@ namespace hpx::execution::detail {
         /// supplying Policy's current \c executor_type as the Executor_
         /// argument so that only the executor parameters change.
         using type = decayed_policy_type::template rebind<
-            decayed_policy_type::executor_type,
-            std::decay_t<Parameters>>::type;
+            decayed_policy_type::executor_type, std::decay_t<Parameters>>::type;
     };
 
     /// \brief Convenience alias for
