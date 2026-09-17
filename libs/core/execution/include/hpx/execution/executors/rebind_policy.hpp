@@ -108,7 +108,7 @@ namespace hpx::execution::detail {
         using type =
             hpx::execution::experimental::rebind_executor_t<decayed_policy_type,
                 decayed_executor_type,
-                decayed_policy_type::executor_parameters_type>;
+                typename decayed_policy_type::executor_parameters_type>;
     };
 
     namespace detail {
@@ -183,8 +183,9 @@ namespace hpx::execution::detail {
         /// \c rebind<Executor_, Parameters_>::type member template,
         /// supplying Policy's current \c executor_type as the Executor_
         /// argument so that only the executor parameters change.
-        using type = decayed_policy_type::template rebind<
-            decayed_policy_type::executor_type, std::decay_t<Parameters>>::type;
+        using type = typename decayed_policy_type::template rebind<
+            typename decayed_policy_type::executor_type,
+            std::decay_t<Parameters>>::type;
     };
 
     /// \brief Convenience alias for
