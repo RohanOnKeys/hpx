@@ -45,21 +45,18 @@ namespace hpx::execution::detail {
     /// \brief The execution category of Policy, or
     ///        hpx::execution::unsequenced_execution_tag (the weakest
     ///        category) if Policy has no nested \c execution_category
-    ///        member. Mirrors how hpx::traits::executor_execution_category
-    ///        falls back for executors, so a policy that predates this
-    ///        check keeps compiling and is simply not constrained by it.
+    ///        member.
+    ///
+    /// This is the same fallback rebind_executor itself now applies to its
+    /// own category1 (see hpx::execution::experimental::detail::
+    /// policy_execution_category_or_unsequenced in rebind_executor.hpp), so
+    /// a policy that predates this check compiles and is simply not
+    /// constrained by it, consistently whether it goes through
+    /// rebind_executor_t directly or through the per-axis customization
+    /// points below.
     template <typename Policy>
-    struct rebind_policy_executor_category
-    {
-    private:
-        template <typename T>
-        using execution_category_of = T::execution_category;
-
-    public:
-        using type =
-            hpx::util::detected_or_t<hpx::execution::unsequenced_execution_tag,
-                execution_category_of, Policy>;
-    };
+    using rebind_policy_executor_category_t = hpx::execution::experimental::
+        detail::policy_execution_category_or_unsequenced_t<Policy>;
     /// \endcond
 
     /// \brief Customization point controlling how an execution policy is
@@ -121,7 +118,7 @@ namespace hpx::execution::detail {
             using decayed_executor_type = std::decay_t<Executor>;
 
             using category1 =
-                rebind_policy_executor_category<decayed_policy_type>::type;
+                rebind_policy_executor_category_t<decayed_policy_type>;
             using category2 = hpx::traits::executor_execution_category_t<
                 decayed_executor_type>;
 
@@ -179,14 +176,64 @@ namespace hpx::execution::detail {
         /// \brief The type of Policy rebound to Parameters, with its
         ///        executor left unchanged.
         ///
-        /// The default implementation forwards to Policy's own
-        /// \c rebind<Executor_, Parameters_>::type member template,
-        /// supplying Policy's current \c executor_type as the Executor_
-        /// argument so that only the executor parameters change.
-        using type = typename decayed_policy_type::template rebind<
-            typename decayed_policy_type::executor_type,
-            std::decay_t<Parameters>>::type;
+        /// The default implementation forwards to
+        /// hpx::execution::experimental::rebind_executor_t, supplying
+        /// Policy's current \c executor_type as the Executor argument so
+        /// that only the executor parameters change. This mirrors
+        /// rebind_policy_executor's default implementation, which forwards
+        /// to the same rebind_executor_t along the other axis, instead of
+        /// calling Policy's \c rebind<Executor_, Parameters_>::type member
+        /// template directly; keeping both axes funneled through the one
+        /// shared implementation means a future change there (e.g. to what
+        /// is validated or computed) applies to both axes automatically
+        /// instead of drifting apart.
+        using type =
+            hpx::execution::experimental::rebind_executor_t<decayed_policy_type,
+                typename decayed_policy_type::executor_type,
+                std::decay_t<Parameters>>;
     };
+
+    namespace detail {
+
+        /// \brief Mirrors validated_rebind_policy_executor along the
+        ///        parameters axis, so a direct specialization of
+        ///        rebind_policy_parameters is checked the same way a
+        ///        specialization of rebind_policy_executor is: going
+        ///        through the primary template's default implementation is
+        ///        not the only way to get the safety check, since a
+        ///        specialization replaces the primary template (and
+        ///        whatever it forwards to) entirely.
+        ///
+        /// The check itself is trivially satisfied for this axis in the
+        /// default case, since the executor does not change here, but
+        /// applying it uniformly keeps rebind_policy_executor_t and
+        /// rebind_policy_parameters_t symmetric customization points with
+        /// the same contract, rather than only one of the two axes being
+        /// independently guarded.
+        template <typename Policy, typename Parameters>
+        struct validated_rebind_policy_parameters
+        {
+        private:
+            using decayed_policy_type = std::decay_t<Policy>;
+
+            using category1 =
+                rebind_policy_executor_category_t<decayed_policy_type>;
+            using category2 = hpx::traits::executor_execution_category_t<
+                typename decayed_policy_type::executor_type>;
+
+            static_assert(
+                hpx::execution::experimental::detail::is_not_weaker_v<category2,
+                    category1>,
+                "the execution category of Policy's own executor must not "
+                "be weaker than that of Policy; see hpx::execution::"
+                "experimental::rebind_executor");
+
+        public:
+            using type = rebind_policy_parameters<decayed_policy_type,
+                std::decay_t<Parameters>>::type;
+        };
+
+    }    // namespace detail
 
     /// \brief Convenience alias for
     ///        \c rebind_policy_parameters<Policy, Parameters>::type.
@@ -199,8 +246,7 @@ namespace hpx::execution::detail {
     ///                    rebound to.
     HPX_CXX_CORE_EXPORT template <typename Policy, typename Parameters>
     using rebind_policy_parameters_t =
-        rebind_policy_parameters<std::decay_t<Policy>,
-            std::decay_t<Parameters>>::type;
+        detail::validated_rebind_policy_parameters<Policy, Parameters>::type;
 
     /// \brief Whether rebinding Policy's executor and executor parameters
     ///        through rebind_policy_executor_t and

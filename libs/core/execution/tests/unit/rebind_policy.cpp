@@ -9,6 +9,7 @@
 /// checked with static_assert; nothing needs to run.
 
 #include <hpx/execution.hpp>
+#include <hpx/execution/executors/create_rebound_policy.hpp>
 #include <hpx/execution/executors/rebind_policy.hpp>
 #include <hpx/modules/testing.hpp>
 
@@ -306,7 +307,92 @@ namespace two_axis_specialization_tests {
 }    // namespace two_axis_specialization_tests
 
 ///////////////////////////////////////////////////////////////////////////
+// hpx::execution::experimental::create_rebound_policy's single-argument
+// overloads now route through rebind_policy_executor_t and
+// rebind_policy_parameters_t (see create_rebound_policy.hpp) instead of
+// computing rebind_executor_t inline. The type-level tests above cannot
+// tell the difference between "the untouched side was copied from the
+// original policy" and "the untouched side was silently defaulted", since
+// a stock executor/parameters type carries no observable state. This
+// section uses a small policy with an id on each side to assert the
+// untouched side's *value*, not just its type, actually survives the
+// rebind, and that the requested side's value is the one that lands.
+namespace construction_state_tests {
+
+    struct labeled_executor
+    {
+        int id = 0;
+    };
+
+    struct labeled_parameters
+    {
+        int id = 0;
+    };
+
+    template <typename Executor, typename Parameters>
+    struct labeled_policy
+    {
+        using executor_type = Executor;
+        using executor_parameters_type = Parameters;
+
+        labeled_policy(Executor exec, Parameters params)
+          : exec_(exec)
+          , params_(params)
+        {
+        }
+
+        template <typename Executor_, typename Parameters_>
+        struct rebind
+        {
+            using type = labeled_policy<Executor_, Parameters_>;
+        };
+
+        Executor executor() const
+        {
+            return exec_;
+        }
+
+        Parameters parameters() const
+        {
+            return params_;
+        }
+
+        Executor exec_;
+        Parameters params_;
+    };
+
+    void run()
+    {
+        using policy_type =
+            labeled_policy<labeled_executor, labeled_parameters>;
+
+        policy_type const policy(labeled_executor{1}, labeled_parameters{1});
+
+        // Rebinding only the executor must keep the original parameters'
+        // value, not just their type, and must construct with the new
+        // executor's value.
+        auto rebound_by_executor =
+            hpx::execution::experimental::create_rebound_policy(
+                policy, labeled_executor{2});
+
+        HPX_TEST_EQ(rebound_by_executor.executor().id, 2);
+        HPX_TEST_EQ(
+            rebound_by_executor.parameters().id, policy.parameters().id);
+
+        // Rebinding only the parameters must keep the original executor's
+        // value, and must construct with the new parameters' value.
+        auto rebound_by_parameters =
+            hpx::execution::experimental::create_rebound_policy(
+                policy, labeled_parameters{2});
+
+        HPX_TEST_EQ(rebound_by_parameters.executor().id, policy.executor().id);
+        HPX_TEST_EQ(rebound_by_parameters.parameters().id, 2);
+    }
+}    // namespace construction_state_tests
+
+///////////////////////////////////////////////////////////////////////////
 int main()
 {
+    construction_state_tests::run();
     return hpx::util::report_errors();
 }
