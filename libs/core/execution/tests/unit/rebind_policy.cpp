@@ -9,8 +9,6 @@
 /// checked with static_assert; nothing needs to run.
 
 #include <hpx/execution.hpp>
-#include <hpx/execution/executors/create_rebound_policy.hpp>
-#include <hpx/execution/executors/rebind_policy.hpp>
 #include <hpx/modules/testing.hpp>
 
 #include <type_traits>
@@ -328,6 +326,31 @@ namespace construction_state_tests {
     {
         int id = 0;
     };
+
+}    // namespace construction_state_tests
+
+namespace hpx::execution::experimental {
+
+    // create_rebound_policy's single-argument overloads are constrained on
+    // hpx::executor_any/hpx::executor_parameters; labeled_executor and
+    // labeled_parameters only need to satisfy those constraints, not behave
+    // as functioning executors or parameters, since nothing here ever
+    // executes anything through them.
+    template <>
+    struct is_one_way_executor<construction_state_tests::labeled_executor>
+      : std::true_type
+    {
+    };
+
+    template <>
+    struct is_executor_parameters<construction_state_tests::labeled_parameters>
+      : std::true_type
+    {
+    };
+
+}    // namespace hpx::execution::experimental
+
+namespace construction_state_tests {
 
     template <typename Executor, typename Parameters>
     struct labeled_policy
