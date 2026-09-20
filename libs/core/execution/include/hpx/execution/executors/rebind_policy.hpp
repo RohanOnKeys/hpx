@@ -36,7 +36,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/execution/executors/rebind_executor.hpp>
-#include <hpx/type_support/detected.hpp>
+#include <hpx/modules/type_support.hpp>
 
 #include <type_traits>
 
@@ -79,7 +79,7 @@ namespace hpx::execution::detail {
     {
     private:
         template <typename T>
-        using executor_type_of = typename T::executor_type;
+        using executor_type_of = T::executor_type;
 
         using own_executor_type =
             hpx::util::detected_or_t<void, executor_type_of, Policy>;
@@ -92,7 +92,7 @@ namespace hpx::execution::detail {
 
     template <typename Policy>
     using rebind_policy_own_executor_category_t =
-        typename rebind_policy_own_executor_category<Policy>::type;
+        rebind_policy_own_executor_category<Policy>::type;
     /// \endcond
 
     /// \brief Customization point controlling how an execution policy is

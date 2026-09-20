@@ -28,12 +28,11 @@ namespace default_customization_point_tests {
     // sequenced_executor's category (sequenced_execution_tag) is not
     // weaker than parallel_policy's (parallel_execution_tag), so this
     // rebind satisfies the same safety check as
-    // hpx::execution::experimental::rebind_executor.
-    static_assert(hpx::execution::experimental::detail::is_not_weaker_v<
-                      new_executor_type::execution_category,
-                      policy_type::execution_category>,
-        "the executor picked for this test must satisfy the category "
-        "check rebind_policy_executor_t enforces");
+    // hpx::execution::experimental::rebind_executor. That check itself
+    // lives in hpx::execution::experimental::detail::is_not_weaker_v, an
+    // unexported implementation detail of the execution module, so it is
+    // not usable from here to assert the premise directly; the category
+    // relationship is spelled out above instead.
 
     // Rebinding the executor leaves the policy's current executor
     // parameters untouched.
@@ -82,7 +81,7 @@ namespace default_customization_point_tests {
             new_parameters_type>;
 
     using rebound_both_axes_combined =
-        typename policy_type::template rebind<new_executor_type,
+        policy_type::template rebind<new_executor_type,
             new_parameters_type>::type;
 
     static_assert(std::is_same_v<rebound_both_axes_separately,

@@ -10,7 +10,7 @@
 #include <hpx/execution/traits/executor_traits.hpp>
 #include <hpx/modules/async_base.hpp>
 #include <hpx/modules/execution_base.hpp>
-#include <hpx/type_support/detected.hpp>
+#include <hpx/modules/type_support.hpp>
 
 #include <type_traits>
 #include <utility>
@@ -75,7 +75,7 @@ namespace hpx::execution::experimental {
 
         template <typename Policy>
         using policy_execution_category_or_unsequenced_t =
-            typename policy_execution_category_or_unsequenced<Policy>::type;
+            policy_execution_category_or_unsequenced<Policy>::type;
         /// \endcond
     }    // namespace detail
 
