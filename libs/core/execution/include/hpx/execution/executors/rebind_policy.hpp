@@ -36,6 +36,7 @@
 
 #include <hpx/config.hpp>
 #include <hpx/execution/executors/rebind_executor.hpp>
+#include <hpx/type_support/detected.hpp>
 
 #include <type_traits>
 
@@ -57,6 +58,41 @@ namespace hpx::execution::detail {
     template <typename Policy>
     using rebind_policy_executor_category_t = hpx::execution::experimental::
         detail::policy_execution_category_or_unsequenced_t<Policy>;
+
+    /// \brief The execution category of Policy's own, current executor
+    ///        (i.e. Policy::executor_type), or Policy's own execution
+    ///        category (see rebind_policy_executor_category_t above) if
+    ///        Policy has no nested \c executor_type member.
+    ///
+    /// A Policy that participates in rebind_policy_parameters only through
+    /// a direct specialization is not required to expose an
+    /// \c executor_type member at all (that member only exists to support
+    /// the default implementation's forwarding to rebind_executor_t), so
+    /// there may be no "current executor" for validated_rebind_policy_
+    /// parameters below to inspect. Falling back to Policy's own execution
+    /// category in that case makes the check trivially satisfied through
+    /// the reflexive hpx::execution::experimental::detail::is_not_weaker_v
+    /// specialization, rather than hard-failing to compile a Policy the
+    /// default implementation was never going to be used for anyway.
+    template <typename Policy>
+    struct rebind_policy_own_executor_category
+    {
+    private:
+        template <typename T>
+        using executor_type_of = typename T::executor_type;
+
+        using own_executor_type =
+            hpx::util::detected_or_t<void, executor_type_of, Policy>;
+
+    public:
+        using type = std::conditional_t<std::is_void_v<own_executor_type>,
+            rebind_policy_executor_category_t<Policy>,
+            hpx::traits::executor_execution_category_t<own_executor_type>>;
+    };
+
+    template <typename Policy>
+    using rebind_policy_own_executor_category_t =
+        typename rebind_policy_own_executor_category<Policy>::type;
     /// \endcond
 
     /// \brief Customization point controlling how an execution policy is
@@ -210,6 +246,11 @@ namespace hpx::execution::detail {
         /// rebind_policy_parameters_t symmetric customization points with
         /// the same contract, rather than only one of the two axes being
         /// independently guarded.
+        ///
+        /// category2 goes through rebind_policy_own_executor_category_t
+        /// rather than accessing Policy::executor_type directly, since a
+        /// Policy participating only through a direct specialization of
+        /// rebind_policy_parameters need not expose that member at all.
         template <typename Policy, typename Parameters>
         struct validated_rebind_policy_parameters
         {
@@ -218,8 +259,8 @@ namespace hpx::execution::detail {
 
             using category1 =
                 rebind_policy_executor_category_t<decayed_policy_type>;
-            using category2 = hpx::traits::executor_execution_category_t<
-                typename decayed_policy_type::executor_type>;
+            using category2 =
+                rebind_policy_own_executor_category_t<decayed_policy_type>;
 
             static_assert(
                 hpx::execution::experimental::detail::is_not_weaker_v<category2,
