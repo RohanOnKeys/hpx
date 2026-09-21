@@ -9,8 +9,17 @@
 /// checked with static_assert; nothing needs to run.
 
 #include <hpx/modules/execution.hpp>
-#include <hpx/modules/executors.hpp>
 #include <hpx/modules/testing.hpp>
+
+// hpx::execution::detail::parallel_policy_shim,
+// hpx::execution::parallel_executor, and hpx::execution::sequenced_executor
+// live in the executors module, not the execution module, so
+// hpx/modules/execution.hpp does not transitively provide them. Pulling
+// them in through the executors module's own generated header, rather
+// than including the raw hpx/executors headers directly, keeps this
+// working under the C++20 modules build, where those raw headers are
+// already brought in through the module import.
+#include <hpx/modules/executors.hpp>
 
 #include <type_traits>
 
@@ -21,18 +30,37 @@ namespace exd = hpx::execution::detail;
 // policy that derives from hpx::execution::detail::execution_policy.
 namespace default_customization_point_tests {
 
-    using policy_type = hpx::execution::parallel_policy;
+    // hpx::execution::parallel_policy is a public alias that gets
+    // redirected away from HPX's own implementation when standard
+    // execution policies are enabled (see
+    // hpx/execution_base/stdexec_forward.hpp), and the type it gets
+    // redirected to does not provide HPX's rebind<Executor, Parameters>
+    // contract. The underlying HPX implementation that
+    // hpx::execution::parallel_policy itself aliases to on non-stdexec
+    // builds is exd::parallel_policy_shim<Executor, Parameters>, defined
+    // unconditionally (no HPX_HAVE_STDEXEC guard) in
+    // hpx/executors/execution_policy.hpp; using it directly, together
+    // with HPX's real hpx::execution::parallel_executor /
+    // hpx::execution::sequenced_executor classes (as opposed to the
+    // policy aliases), keeps this test meaningful regardless of whether
+    // standard execution policies are enabled.
+    using policy_type =
+        exd::parallel_policy_shim<hpx::execution::parallel_executor,
+            hpx::traits::executor_parameters_type_t<
+                hpx::execution::parallel_executor>>;
     using new_executor_type = hpx::execution::sequenced_executor;
     using new_parameters_type = hpx::execution::experimental::static_chunk_size;
 
     // sequenced_executor's category (sequenced_execution_tag) is not
-    // weaker than parallel_policy's (parallel_execution_tag), so this
-    // rebind satisfies the same safety check as
-    // hpx::execution::experimental::rebind_executor. That check itself
-    // lives in hpx::execution::experimental::detail::is_not_weaker_v, an
-    // unexported implementation detail of the execution module, so it is
-    // not usable from here to assert the premise directly; the category
-    // relationship is spelled out above instead.
+    // weaker than parallel_executor's (parallel_execution_tag), so this
+    // rebind satisfies the category check rebind_policy_executor_t's
+    // default implementation enforces internally (see
+    // hpx/execution/executors/rebind_policy.hpp). That check is exercised
+    // for real below, at the point rebind_policy_executor_t is actually
+    // used; it is not repeated here directly against
+    // hpx::execution::experimental::detail::is_not_weaker_v, since that
+    // is an unexported, module-internal implementation detail and is not
+    // reachable from this translation unit under the C++20 modules build.
 
     // Rebinding the executor leaves the policy's current executor
     // parameters untouched.

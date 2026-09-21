@@ -35,7 +35,7 @@
 #pragma once
 
 #include <hpx/config.hpp>
-#include <hpx/execution/executors/rebind_executor.hpp>
+#include <hpx/modules/execution.hpp>
 #include <hpx/modules/type_support.hpp>
 
 #include <type_traits>
@@ -109,10 +109,13 @@ namespace hpx::execution::detail {
     /// derive from hpx::execution::detail::execution_policy, or from
     /// anything else, at all.
     ///
-    /// The default implementation enforces the same safety guarantee as
-    /// hpx::execution::experimental::rebind_executor: Executor's
-    /// execution category must not be weaker than Policy's. A Policy
-    /// without a nested \c execution_category member is treated as
+    /// rebind_policy_executor itself performs no validation; the safety
+    /// guarantee hpx::execution::experimental::rebind_executor enforces
+    /// (Executor's execution category must not be weaker than Policy's)
+    /// is applied uniformly to both the default implementation below and
+    /// to any direct specialization by rebind_policy_executor_t, through
+    /// detail::validated_rebind_policy_executor. A Policy without a
+    /// nested \c execution_category member is treated as
     /// hpx::execution::unsequenced_execution_tag, the weakest category,
     /// so the check never rejects a policy that simply does not track
     /// one.
@@ -134,9 +137,9 @@ namespace hpx::execution::detail {
         /// \brief The type of Policy rebound to Executor, with its
         ///        executor parameters left unchanged.
         ///
-        /// The default implementation forwards to Policy's own
-        /// \c rebind<Executor_, Parameters_>::type member template,
-        /// supplying Policy's current \c executor_parameters_type as the
+        /// The default implementation forwards to
+        /// hpx::execution::experimental::rebind_executor_t, supplying
+        /// Policy's current \c executor_parameters_type as the
         /// Parameters_ argument so that only the executor changes.
         using type =
             hpx::execution::experimental::rebind_executor_t<decayed_policy_type,
@@ -146,6 +149,16 @@ namespace hpx::execution::detail {
 
     namespace detail {
 
+        /// \brief Applies the execution category safety check to
+        ///        rebind_policy_executor's result, so the check runs
+        ///        uniformly whether rebind_policy_executor is used
+        ///        through its default implementation or through a
+        ///        direct specialization: a specialization replaces the
+        ///        primary template entirely, so the check cannot live
+        ///        inside rebind_policy_executor itself if it is to apply
+        ///        to every specialization. rebind_policy_executor_t
+        ///        below is the public entry point that goes through
+        ///        this wrapper.
         template <typename Policy, typename Executor>
         struct validated_rebind_policy_executor
         {
@@ -173,7 +186,10 @@ namespace hpx::execution::detail {
     }    // namespace detail
 
     /// \brief Convenience alias for
-    ///        \c rebind_policy_executor<Policy, Executor>::type.
+    ///        \c detail::validated_rebind_policy_executor<Policy,
+    ///        Executor>::type, i.e. \c rebind_policy_executor<Policy,
+    ///        Executor>::type with the execution category safety check
+    ///        applied first.
     ///
     /// Rebinds the executor of Policy to Executor, keeping its executor
     /// parameters unchanged.
@@ -277,7 +293,10 @@ namespace hpx::execution::detail {
     }    // namespace detail
 
     /// \brief Convenience alias for
-    ///        \c rebind_policy_parameters<Policy, Parameters>::type.
+    ///        \c detail::validated_rebind_policy_parameters<Policy,
+    ///        Parameters>::type, i.e. \c rebind_policy_parameters<Policy,
+    ///        Parameters>::type with the execution category safety check
+    ///        applied first.
     ///
     /// Rebinds the executor parameters of Policy to Parameters, keeping
     /// its executor unchanged.
